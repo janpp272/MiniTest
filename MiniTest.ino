@@ -1,12 +1,47 @@
-#include <ArrayList.h>
+#include <ArduinoSTL.h>
+
+#include<math.h>
+
+#include <iostream>
+#include <vector>
+#include <algorithm>
 
 const static int PIN_COUNT = 12;
+
+enum class Color {
+  RED,
+  GREEN,
+  BOTH
+};
+
+enum class PinState {
+  DRIVE,
+  RECEIVE
+};
 
 bool assertThat(bool condition, String exception) {
   if (!condition) {
     Serial.println("Assertion error: '" + exception);
     abort();
   }
+}
+
+void blink(Color color, int duration) {
+  assertThat(duration > 0, "Unexpected blink duration!");
+  switch(color) {
+    case Color::RED:
+      digitalWrite(11, HIGH);
+      break;
+    case Color::GREEN:
+      digitalWrite(12, HIGH);
+      break;
+    case Color::BOTH:
+      digitalWrite(11, HIGH);
+      digitalWrite(12, HIGH);
+  }
+  delay(duration * 1000);
+  digitalWrite(11, LOW);
+  digitalWrite(12, LOW);
 }
 
 class Pin {
@@ -34,7 +69,13 @@ class Pin {
     }
 
     bool operator==(const Pin& comparison) const {
-      return myPinName == comparison.myPinName && myPinRole == comparison.myPinRole;
+      // return this->myPinName == comparison.myPinName && myPinRole == comparison.myPinRole;
+      return true;
+    }
+
+    bool operator!=(const Pin& comparison) const {
+        // return this->myPinName != comparison.myPinName || myPinRole != comparison.myPinRole;
+        return true;
     }
 
   private:
@@ -44,13 +85,13 @@ class Pin {
 
 class PinConfiguration {
   public:
-    PinConfiguration(ArrayList<Pin> pins) {
+    PinConfiguration(std::vector<Pin> pins) {
       assertThat(pins.size() == PIN_COUNT, "Pin configuration has wrong number of pins!");
 
       for (Pin pin : pins) {
         int pinName = pin.getName();
-        assertThat(!knownPinNames.contains(pinName), "Duplicate pin defined!");
-        knownPinNames.add(pinName);
+        assertThat(std::find(knownPinNames.begin(), knownPinNames.end(), pinName) != knownPinNames.end(), "Duplicate pin defined!");
+        knownPinNames.push_back(pinName);
       }
       myPins = pins;
     }
@@ -59,23 +100,28 @@ class PinConfiguration {
       return myPins.size();
     }
 
-    ArrayList<Pin> getPinGroupByRole(String role) {
+    std::vector<Pin> getPinGroupByRole(String role) {
       assertThat(role.equals("DRIVE") || role.equals("RECEIVE"), "Unknown pin role");
-      ArrayList<Pin> pinGroup;
+      std::vector<Pin> pinGroup;
       for (Pin pin : myPins) {
         if(pin.getRole().equals(role)) {
-          pinGroup.add(pin);
+          pinGroup.push_back(pin);
         }
       }
       return pinGroup;
     }
 
     bool hasPin(Pin pin) {
-      return myPins.contains(pin);
+      return std::find(myPins.begin(), myPins.end(), pin) != myPins.end();
     }
 
     int getPinIndex(Pin pin) {
-      return myPins.indexOf(pin);
+      for (size_t i = 0; i < myPins.size(); ++i) {
+        if (myPins[i] == pin) {
+          return i;
+        }
+      }
+      assertThat(false, "Pin was not found!");
     }
 
     void powerUp() {
@@ -95,40 +141,40 @@ class PinConfiguration {
     }
 
   private:
-    ArrayList<Pin> myPins;
-    ArrayList<int> knownPinNames;
+    std::vector<Pin> myPins;
+    std::vector<int> knownPinNames;
 };
 
 class PatternData {
   public:
-    PatternData(ArrayList<ArrayList<char>> data) {
+    PatternData(std::vector<std::vector<char>> data) {
       assertThat(data.size() > 0, "Pattern is empty!");
 
-      ArrayList<char> allowedCharacters;
-      allowedCharacters.add('0');
-      allowedCharacters.add('1');
-      allowedCharacters.add('L');
-      allowedCharacters.add('H');
-      allowedCharacters.add('X');
+      std::vector<char> allowedCharacters;
+      allowedCharacters.push_back('0');
+      allowedCharacters.push_back('1');
+      allowedCharacters.push_back('L');
+      allowedCharacters.push_back('H');
+      allowedCharacters.push_back('X');
 
-      for (ArrayList<char> vector : data) {
+      for (std::vector<char> vector : data) {
         assertThat(vector.size() == PIN_COUNT, "Vector has wrong number of elements");
         for (char stateCharacter : vector) {
-          assertThat(allowedCharacters.contains(stateCharacter), "Invalid state character");
+          assertThat(std::find(allowedCharacters.begin(), allowedCharacters.end(), stateCharacter) != allowedCharacters.end(), "Invalid state character");
         }
       }
 
       myData = data;
     }
 
-    ArrayList<char> getVector(int vectorNumber) {
+    std::vector<char> getVector(int vectorNumber) {
       assertThat(vectorNumber < myData.size() && vectorNumber >= 0, "Vector position out of range");
-      return myData.get(vectorNumber);
+      return myData[vectorNumber];
     }
 
     char getStateCharacter(int vectorNumber, int pinIndex) {
       assertThat(vectorNumber < myData.size() && vectorNumber >= 0, "Vector position out of range");
-      return myData.get(vectorNumber).get(pinIndex);
+      return myData[vectorNumber][pinIndex];
     }
 
     int getVectorCount() {
@@ -136,7 +182,7 @@ class PatternData {
     }
 
   private:
-    ArrayList<ArrayList<char>> myData;
+    std::vector<std::vector<char>> myData;
     int vectorLength;
 };
 
@@ -144,7 +190,7 @@ class Pattern {
   public:
     Pattern(PinConfiguration pinConfiguration, PatternData patternData) : myPinConfiguration(pinConfiguration), myPatternData(patternData) {    }
 
-    ArrayList<char> getVector(int vectorNumber) {
+    std::vector<char> getVector(int vectorNumber) {
       assertThat(vectorNumber < myPatternData.getVectorCount() && vectorNumber >= 0, "Vector number out of range");
       return myPatternData.getVector(vectorNumber);
     }
@@ -181,7 +227,7 @@ class Result {
     void fail(int failingVector) {
       passed = false;
       failed = true;
-      failingVectors.add(failingVector);
+      failingVectors.push_back(failingVector);
     }
 
     bool hasPassed() {
@@ -192,14 +238,14 @@ class Result {
       return failed;
     }
 
-    ArrayList<int> getFailingVectors() {
+    std::vector<int> getFailingVectors() {
       return failingVectors;
     }
 
   private:
     bool passed;
     bool failed;
-    ArrayList<int> failingVectors = ArrayList<int>();
+    std::vector<int> failingVectors = std::vector<int>();
 };
 
 class TestProgram {
@@ -216,8 +262,10 @@ class TestProgram {
           switch (driveValue) {
             case '0':
               digitalWrite(pin.getName(), LOW);
+              break;
             case '1':
               digitalWrite(pin.getName(), HIGH);
+              break;
           }
         }
         delay(10);
@@ -226,10 +274,15 @@ class TestProgram {
           int pinResponse = digitalRead(pin.getName());
           if (pinResponse == 1 && expectedResponse == 'L') {
             myResult.fail(vectorCount);
+            blink(Color::RED, 10);
+            abort();
           } else if (pinResponse == 0 && expectedResponse == 'H') {
             myResult.fail(vectorCount);
+            blink(Color::RED, 10);
+            abort();
           }
         }
+        blink(Color::GREEN, 10);
       }
     }
 
@@ -239,37 +292,21 @@ class TestProgram {
 };
 
 void setup() {
-  Pin configuredPins[PIN_COUNT] = {
+  pinMode(11, OUTPUT); //RED
+  pinMode(12, OUTPUT); //GREEN
+  Serial.begin(9600);
+
+  std::vector<Pin> myPins = {
     Pin(1, "DRIVE"),
     Pin(2, "DRIVE"),
     Pin(3, "RECEIVE"),
-    Pin(4, "DRIVE"),
-    Pin(5, "DRIVE"),
-    Pin(6, "RECEIVE"),
-    Pin(7, "DRIVE"),
-    Pin(8, "DRIVE"),
-    Pin(9, "RECEIVE"),
-    Pin(10, "DRIVE"),
-    Pin(11, "DRIVE"),
-    Pin(12, "RECEIVE")
   };
-
-  ArrayList<Pin> thisConfiguration = ArrayList<Pin>();
-  for (int i = 0; i < PIN_COUNT; i++) {
-    thisConfiguration.add(configuredPins[i]);
-  }
   
-  PinConfiguration myPinConfiguration(thisConfiguration);
+  PinConfiguration myPinConfiguration(myPins);
 
-  int drivePins;
-  for (Pin pin : thisConfiguration) {
-    if (pin.getRole().equals("DRIVE")) {
-      drivePins++;
-    }
-  }
-  int maxNumberOfInputCombinations = 2^drivePins;
+  int maxNumberOfInputCombinations = pow(2, myPinConfiguration.getPinGroupByRole("DRIVE").size());
 
-  char arrayData[maxNumberOfInputCombinations][PIN_COUNT] = {
+  std::vector<std::vector<char>> myPatternDataData = {
     {'0', '0', '0', '0', '0', '0', '0', '0', 'L', 'L', 'L', 'L'},
     {'0', '0', '0', '0', '0', '0', '0', '1', 'L', 'L', 'L', 'L'},
     {'0', '0', '0', '0', '0', '0', '1', '0', 'L', 'L', 'L', 'L'},
@@ -336,16 +373,7 @@ void setup() {
     {'0', '0', '1', '1', '1', '1', '1', '1', 'L', 'H', 'H', 'H'},
   };
 
-  ArrayList<ArrayList<char>> thisData;
-  for (auto &row : arrayData) {
-    ArrayList<char> vector = ArrayList<char>();
-    for (char stateCharacter : row) {
-      vector.add(stateCharacter);
-    }
-    thisData.add(vector);
-  }
-
-  PatternData myPatternData(thisData);
+  PatternData myPatternData(myPatternDataData);
 
   Pattern myPattern(myPinConfiguration, myPatternData);
 
@@ -354,14 +382,6 @@ void setup() {
   TestProgram myTestProgram(myPattern, myResult);
 
   myTestProgram.execute();
-}
-
-void setup() {
-  Serial.begin(9600);
-  Pin myPin(1, "ASDF");
-  ArrayList<Pin> pinList = ArrayList<Pin>();
-  pinList.add(myPin);
-  PinConfiguration myPinConfig(pinList);
 }
 
 void loop() {  }
