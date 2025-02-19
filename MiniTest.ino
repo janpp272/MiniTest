@@ -6,15 +6,13 @@
 #include <vector>
 #include <algorithm>
 
-const static int PIN_COUNT = 12;
-
 enum class Color {
   RED,
   GREEN,
   BOTH
 };
 
-enum class PinState {
+enum class PinRole {
   DRIVE,
   RECEIVE
 };
@@ -48,13 +46,14 @@ class Pin {
   public:
     Pin() {    }
 
-    Pin(int pinName, String pinRole) {
-      assertThat(pinRole.equals("DRIVE") || pinRole.equals("RECEIVE"), "Invalid Pin Mode");
-
-      if (pinRole.equals("DRIVE") || pinRole.equals("POWER")) {
-        pinMode(pinName, OUTPUT);
-      } else if (pinRole.equals("RECEIVE") || pinRole.equals("GND")) {
-        pinMode(pinName, INPUT);
+    Pin(int pinName, PinRole pinRole) {
+      switch (pinRole) {
+        case PinRole::DRIVE:
+          pinMode(pinName, OUTPUT);
+          break;
+        case PinRole::RECEIVE:
+          pinMode(pinName, INPUT);
+          break;
       }
       myPinName = pinName;
       myPinRole = pinRole;
@@ -64,47 +63,59 @@ class Pin {
       return myPinName;
     }
 
-    String getRole() {
+    PinRole getRole() {
       return myPinRole;
     }
 
     bool operator==(const Pin& comparison) const {
-      // return this->myPinName == comparison.myPinName && myPinRole == comparison.myPinRole;
-      return true;
+      return this->myPinName == comparison.myPinName && myPinRole == comparison.myPinRole;
+      // return true;
     }
 
     bool operator!=(const Pin& comparison) const {
-        // return this->myPinName != comparison.myPinName || myPinRole != comparison.myPinRole;
-        return true;
+      return this->myPinName != comparison.myPinName || myPinRole != comparison.myPinRole;
+      // return true;
     }
 
   private:
     int myPinName;
-    String myPinRole;
+    PinRole myPinRole;
 };
 
 class PinConfiguration {
   public:
-    PinConfiguration(std::vector<Pin> pins) {
-      assertThat(pins.size() == PIN_COUNT, "Pin configuration has wrong number of pins!");
+    PinConfiguration(std::vector<Pin> dataPins) {
+      // assertThat(pins.size() == PIN_COUNT, "Pin configuration has wrong number of pins!");
 
-      for (Pin pin : pins) {
+      for (Pin pin : dataPins) {
         int pinName = pin.getName();
         assertThat(std::find(knownPinNames.begin(), knownPinNames.end(), pinName) != knownPinNames.end(), "Duplicate pin defined!");
         knownPinNames.push_back(pinName);
       }
-      myPins = pins;
+      myPins = dataPins;
+    }
+
+    PinConfiguration(std::vector<Pin> dataPins, int supplyPin, int groundPin) {
+      pinMode(supplyPin, OUTPUT);
+      digitalWrite(supplyPin, HIGH);
+      pinMode(groundPin, INPUT);
+
+      for (Pin pin : dataPins) {
+        int pinName = pin.getName();
+        assertThat(std::find(knownPinNames.begin(), knownPinNames.end(), pinName) != knownPinNames.end(), "Duplicate pin defined!");
+        knownPinNames.push_back(pinName);
+      }
+      myPins = dataPins;
     }
 
     int getPinCount() {
       return myPins.size();
     }
 
-    std::vector<Pin> getPinGroupByRole(String role) {
-      assertThat(role.equals("DRIVE") || role.equals("RECEIVE"), "Unknown pin role");
+    std::vector<Pin> getPinGroupByRole(PinRole role) {
       std::vector<Pin> pinGroup;
       for (Pin pin : myPins) {
-        if(pin.getRole().equals(role)) {
+        if(pin.getRole() == role) {
           pinGroup.push_back(pin);
         }
       }
@@ -122,22 +133,6 @@ class PinConfiguration {
         }
       }
       assertThat(false, "Pin was not found!");
-    }
-
-    void powerUp() {
-      for (Pin pin : myPins) {
-        if (pin.getRole().equals("POWER")) {
-          digitalWrite(pin.getName(), HIGH);
-        }
-      }
-    }
-
-    void powerDown() {
-      for (Pin pin : myPins) {
-        if (pin.getRole().equals("POWER")) {
-          digitalWrite(pin.getName(), LOW);
-        }
-      }
     }
 
   private:
@@ -158,7 +153,7 @@ class PatternData {
       allowedCharacters.push_back('X');
 
       for (std::vector<char> vector : data) {
-        assertThat(vector.size() == PIN_COUNT, "Vector has wrong number of elements");
+        // assertThat(vector.size() == PIN_COUNT, "Vector has wrong number of elements");
         for (char stateCharacter : vector) {
           assertThat(std::find(allowedCharacters.begin(), allowedCharacters.end(), stateCharacter) != allowedCharacters.end(), "Invalid state character");
         }
@@ -208,10 +203,6 @@ class Pattern {
       return myPatternData.getVectorCount();
     }
 
-    int powerUp() {
-      myPinConfiguration.powerUp();
-    }
-
     private:
       PinConfiguration myPinConfiguration;
       PatternData myPatternData;
@@ -257,7 +248,7 @@ class TestProgram {
       int vectorCount = myPattern.getVectorCount();
       int pinCount = pinConfiguration.getPinCount();
       for (int i = 0; i < vectorCount; i++) {
-        for (Pin pin : pinConfiguration.getPinGroupByRole("DRIVE")) {
+        for (Pin pin : pinConfiguration.getPinGroupByRole(PinRole::DRIVE)) {
           char driveValue = myPattern.getStateCharacter(i, pin);
           switch (driveValue) {
             case '0':
@@ -269,7 +260,7 @@ class TestProgram {
           }
         }
         delay(10);
-        for (Pin pin : pinConfiguration.getPinGroupByRole("RECEIVE")) {
+        for (Pin pin : pinConfiguration.getPinGroupByRole(PinRole::RECEIVE)) {
           char expectedResponse = myPattern.getStateCharacter(i, pin);
           int pinResponse = digitalRead(pin.getName());
           if (pinResponse == 1 && expectedResponse == 'L') {
@@ -295,16 +286,17 @@ void setup() {
   pinMode(11, OUTPUT); //RED
   pinMode(12, OUTPUT); //GREEN
   Serial.begin(9600);
+  Serial.println("Starting setup");
 
   std::vector<Pin> myPins = {
-    Pin(1, "DRIVE"),
-    Pin(2, "DRIVE"),
-    Pin(3, "RECEIVE"),
+    Pin(1, PinRole::DRIVE),
+    Pin(2, PinRole::DRIVE),
+    Pin(3, PinRole::RECEIVE),
   };
   
   PinConfiguration myPinConfiguration(myPins);
 
-  int maxNumberOfInputCombinations = pow(2, myPinConfiguration.getPinGroupByRole("DRIVE").size());
+  int maxNumberOfInputCombinations = pow(2, myPinConfiguration.getPinGroupByRole(PinRole::DRIVE).size());
 
   std::vector<std::vector<char>> myPatternDataData = {
     {'0', '0', '0', '0', '0', '0', '0', '0', 'L', 'L', 'L', 'L'},
