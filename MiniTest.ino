@@ -17,6 +17,46 @@ enum class PinRole {
   RECEIVE
 };
 
+enum class GPIO {
+  D1,
+  D2,
+  D3,
+  D4,
+  D5,
+  D6,
+  D7,
+  D8,
+  D9,
+  D10,
+  A1,
+  A2,
+  A3,
+  A4,
+  A5,
+  A6
+};
+
+int gpioToPin(GPIO gpio) {
+  switch(gpio) {
+    case GPIO::D1: return 1;
+    case GPIO::D2: return 2;
+    case GPIO::D3: return 3;
+    case GPIO::D4: return 4;
+    case GPIO::D5: return 5;
+    case GPIO::D6: return 6;
+    case GPIO::D7: return 7;
+    case GPIO::D8: return 8;
+    case GPIO::D9: return 9;
+    case GPIO::D10: return 10;
+    case GPIO::A1: return A1;
+    case GPIO::A2: return A2;
+    case GPIO::A3: return A3;
+    case GPIO::A4: return A4;
+    case GPIO::A5: return A5;
+    case GPIO::A6: return A6;
+  }
+}
+
 bool assertThat(bool condition, String exception) {
   if (!condition) {
     Serial.println("Assertion error: '" + exception);
@@ -46,20 +86,20 @@ class Pin {
   public:
     Pin() {    }
 
-    Pin(int pinName, PinRole pinRole) {
+    Pin(GPIO pinName, PinRole pinRole) {
       switch (pinRole) {
         case PinRole::DRIVE:
-          pinMode(pinName, OUTPUT);
+          pinMode(gpioToPin(pinName), OUTPUT);
           break;
         case PinRole::RECEIVE:
-          pinMode(pinName, INPUT);
+          pinMode(gpioToPin(pinName), INPUT);
           break;
       }
       myPinName = pinName;
       myPinRole = pinRole;
     };
 
-    int getName() {
+    GPIO getName() {
       return myPinName;
     }
 
@@ -78,33 +118,21 @@ class Pin {
     }
 
   private:
-    int myPinName;
+    GPIO myPinName;
     PinRole myPinRole;
 };
 
 class PinConfiguration {
   public:
     PinConfiguration(std::vector<Pin> dataPins) {
-      // assertThat(pins.size() == PIN_COUNT, "Pin configuration has wrong number of pins!");
-
-      for (Pin pin : dataPins) {
-        int pinName = pin.getName();
-        assertThat(std::find(knownPinNames.begin(), knownPinNames.end(), pinName) != knownPinNames.end(), "Duplicate pin defined!");
-        knownPinNames.push_back(pinName);
-      }
+      // assertThat(std::find(dataPins.begin(), dataPins.end(), pinName) != dataPins.end(), "Duplicate pin defined!");
       myPins = dataPins;
     }
 
-    PinConfiguration(std::vector<Pin> dataPins, int supplyPin, int groundPin) {
-      pinMode(supplyPin, OUTPUT);
-      digitalWrite(supplyPin, HIGH);
-      pinMode(groundPin, INPUT);
-
-      for (Pin pin : dataPins) {
-        int pinName = pin.getName();
-        assertThat(std::find(knownPinNames.begin(), knownPinNames.end(), pinName) != knownPinNames.end(), "Duplicate pin defined!");
-        knownPinNames.push_back(pinName);
-      }
+    PinConfiguration(std::vector<Pin> dataPins, GPIO supplyPin, GPIO groundPin) {
+      pinMode(gpioToPin(supplyPin), OUTPUT);
+      digitalWrite(gpioToPin(supplyPin), HIGH);
+      pinMode(gpioToPin(groundPin), INPUT);
       myPins = dataPins;
     }
 
@@ -137,7 +165,6 @@ class PinConfiguration {
 
   private:
     std::vector<Pin> myPins;
-    std::vector<int> knownPinNames;
 };
 
 class PatternData {
@@ -153,7 +180,6 @@ class PatternData {
       allowedCharacters.push_back('X');
 
       for (std::vector<char> vector : data) {
-        // assertThat(vector.size() == PIN_COUNT, "Vector has wrong number of elements");
         for (char stateCharacter : vector) {
           assertThat(std::find(allowedCharacters.begin(), allowedCharacters.end(), stateCharacter) != allowedCharacters.end(), "Invalid state character");
         }
@@ -183,10 +209,13 @@ class PatternData {
 
 class Pattern {
   public:
-    Pattern(PinConfiguration pinConfiguration, PatternData patternData) : myPinConfiguration(pinConfiguration), myPatternData(patternData) {    }
+    Pattern(PinConfiguration pinConfiguration, PatternData patternData) : myPinConfiguration(pinConfiguration), myPatternData(patternData) {
+      // Assert that every vector in the pattern has the right length
+    }
 
     std::vector<char> getVector(int vectorNumber) {
       assertThat(vectorNumber < myPatternData.getVectorCount() && vectorNumber >= 0, "Vector number out of range");
+      assertThat(myPatternData.getVector(vectorNumber).size() == myPinConfiguration.getPinCount(), "Wrong number of elements in vector!");
       return myPatternData.getVector(vectorNumber);
     }
 
@@ -246,23 +275,22 @@ class TestProgram {
     void execute() {
       PinConfiguration pinConfiguration = myPattern.getPinConfiguration();
       int vectorCount = myPattern.getVectorCount();
-      int pinCount = pinConfiguration.getPinCount();
       for (int i = 0; i < vectorCount; i++) {
         for (Pin pin : pinConfiguration.getPinGroupByRole(PinRole::DRIVE)) {
           char driveValue = myPattern.getStateCharacter(i, pin);
           switch (driveValue) {
             case '0':
-              digitalWrite(pin.getName(), LOW);
+              digitalWrite(gpioToPin(pin.getName()), LOW);
               break;
             case '1':
-              digitalWrite(pin.getName(), HIGH);
+              digitalWrite(gpioToPin(pin.getName()), HIGH);
               break;
           }
         }
         delay(10);
         for (Pin pin : pinConfiguration.getPinGroupByRole(PinRole::RECEIVE)) {
           char expectedResponse = myPattern.getStateCharacter(i, pin);
-          int pinResponse = digitalRead(pin.getName());
+          int pinResponse = digitalRead(gpioToPin(pin.getName()));
           if (pinResponse == 1 && expectedResponse == 'L') {
             myResult.fail(vectorCount);
             blink(Color::RED, 10);
@@ -289,9 +317,9 @@ void setup() {
   Serial.println("Starting setup");
 
   std::vector<Pin> myPins = {
-    Pin(1, PinRole::DRIVE),
-    Pin(2, PinRole::DRIVE),
-    Pin(3, PinRole::RECEIVE),
+    Pin(GPIO::D1, PinRole::DRIVE),
+    Pin(GPIO::D2, PinRole::DRIVE),
+    Pin(GPIO::D3, PinRole::RECEIVE),
   };
   
   PinConfiguration myPinConfiguration(myPins);
