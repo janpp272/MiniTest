@@ -57,7 +57,6 @@ int gpioToPin(GPIO gpio) {
 
 bool assertThat(bool condition, String exception) {
   if (!condition) {
-    Serial.println("Assertion error: '" + exception);
     for (int i = 0; i < 3; i++) {
       blink(Color::RED, 2);
       delay(100);
@@ -89,7 +88,6 @@ class Pin {
     Pin() {    }
 
     Pin(GPIO pinName, PinRole pinRole) {
-      Serial.println("Initializing new pin " + (String) gpioToPin(pinName));
       switch (pinRole) {
         case PinRole::DRIVE:
           pinMode(gpioToPin(pinName), OUTPUT);
@@ -126,7 +124,6 @@ class Pin {
 class PinConfiguration {
   public:
     PinConfiguration(std::vector<Pin> dataPins) {
-      Serial.println("Initializing new PinConfiguration with " + (String) dataPins.size() + " pins");
       // assertThat(std::find(dataPins.begin(), dataPins.end(), pinName) != dataPins.end(), "Duplicate pin defined!");
       myPins = dataPins;
     }
@@ -165,7 +162,6 @@ class PinConfiguration {
 class PatternData {
   public:
     PatternData(std::vector<std::vector<char>> data) {
-      Serial.println("Initializing new PatternData with " + (String) data.size() + " vectors");
       assertThat(data.size() > 0, "Pattern is empty!");
 
       std::vector<char> allowedCharacters;
@@ -206,7 +202,6 @@ class PatternData {
 class Pattern {
   public:
     Pattern(PinConfiguration pinConfiguration, PatternData patternData) : myPinConfiguration(pinConfiguration), myPatternData(patternData) {
-      Serial.println("Initializing Pattern");
       // for (int i = 0; i < patternData.getVectorCount(); i++) {
       //   assertThat(patternData.getVector(i).size() == pinConfiguration.getPinCount(), "Invalid number of state characters in vector!");
       // }
@@ -240,7 +235,6 @@ class Pattern {
 class Result {
   public:
     Result() {
-      Serial.println("Initializing result with default values");
       passed = true;
       failed = false;
     }
@@ -271,12 +265,9 @@ class Result {
 
 class TestProgram {
   public:
-    TestProgram(Pattern pattern) : myPattern(pattern) {//}, Result result) : myPattern(pattern), myResult(result) {
-      Serial.println("Initializing new TestProgram");
-    }
+    TestProgram(Pattern pattern, Result& result) : myPattern(pattern), myResult(result) {    }
 
     void execute() {
-      Serial.println("TestProgram will now be executed");
       PinConfiguration pinConfiguration = myPattern.getPinConfiguration();
       int vectorCount = myPattern.getVectorCount();
       for (int i = 0; i < vectorCount; i++) {
@@ -296,30 +287,22 @@ class TestProgram {
           char expectedResponse = myPattern.getStateCharacter(i, pin);
           int pinResponse = digitalRead(gpioToPin(pin.getName()));
           if (pinResponse == 1 && expectedResponse == 'L') {
-            // myResult.fail(vectorCount);
-            blink(Color::RED, 10);
-            abort();
+            myResult.fail(vectorCount);
           } else if (pinResponse == 0 && expectedResponse == 'H') {
-            // myResult.fail(vectorCount);
-            blink(Color::RED, 10);
-            abort();
+            myResult.fail(vectorCount);
           }
         }
       }
-      blink(Color::GREEN, 10);
     }
 
   private:
     Pattern myPattern;
-    // Result myResult;
+    Result& myResult;
 };
 
 void setup() {
   pinMode(11, OUTPUT); //RED
   pinMode(12, OUTPUT); //GREEN
-  Serial.begin(9600);
-  Serial.println("Starting setup");
-  blink(Color::BOTH, 1);
 
   std::vector<Pin> myPinsMinimal = {
     Pin(GPIO::D9, PinRole::DRIVE),
@@ -337,12 +320,18 @@ void setup() {
   PinConfiguration myPinConfiguration(myPinsMinimal);
   PatternData myPatternData(myPatternDataVectorsMinimal);
   Pattern myPattern(myPinConfiguration, myPatternData);
-
-  // Result myResult;
   
-  TestProgram myTestProgram(myPattern);//, myResult);
+  Result myResult;
+
+  TestProgram myTestProgram(myPattern, myResult);
 
   myTestProgram.execute();
+
+  if (myResult.hasPassed()) {
+    blink(Color::GREEN, 1);
+  } else {
+    blink(Color::RED, 1);
+  }
 }
 
-void loop() {    }
+void loop() {  abort();  }
