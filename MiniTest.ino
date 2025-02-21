@@ -59,9 +59,10 @@ bool assertThat(bool condition, String exception) {
   if (!condition) {
     Serial.println("Assertion error: '" + exception);
     for (int i = 0; i < 3; i++) {
-      blink(Color::RED, 0.2);
+      blink(Color::RED, 2);
+      delay(100);
     }
-    while (true);
+    abort();
   }
 }
 
@@ -111,12 +112,10 @@ class Pin {
 
     bool operator==(const Pin& comparison) const {
       return this->myPinName == comparison.myPinName && myPinRole == comparison.myPinRole;
-      // return true;
     }
 
     bool operator!=(const Pin& comparison) const {
       return this->myPinName != comparison.myPinName || myPinRole != comparison.myPinRole;
-      // return true;
     }
 
   private:
@@ -129,13 +128,6 @@ class PinConfiguration {
     PinConfiguration(std::vector<Pin> dataPins) {
       Serial.println("Initializing new PinConfiguration with " + (String) dataPins.size() + " pins");
       // assertThat(std::find(dataPins.begin(), dataPins.end(), pinName) != dataPins.end(), "Duplicate pin defined!");
-      myPins = dataPins;
-    }
-
-    PinConfiguration(std::vector<Pin> dataPins, GPIO supplyPin, GPIO groundPin) {
-      pinMode(gpioToPin(supplyPin), OUTPUT);
-      digitalWrite(gpioToPin(supplyPin), HIGH);
-      pinMode(gpioToPin(groundPin), INPUT);
       myPins = dataPins;
     }
 
@@ -215,7 +207,9 @@ class Pattern {
   public:
     Pattern(PinConfiguration pinConfiguration, PatternData patternData) : myPinConfiguration(pinConfiguration), myPatternData(patternData) {
       Serial.println("Initializing Pattern");
-      // Assert that every vector in the pattern has the right length
+      // for (int i = 0; i < patternData.getVectorCount(); i++) {
+      //   assertThat(patternData.getVector(i).size() == pinConfiguration.getPinCount(), "Invalid number of state characters in vector!");
+      // }
     }
 
     std::vector<char> getVector(int vectorNumber) {
@@ -230,6 +224,7 @@ class Pattern {
 
     char getStateCharacter(int vector, Pin pin) {
       assertThat(vector >= 0 && vector < myPatternData.getVectorCount(), "Vector index out of range");
+      // assertThat(myPinConfiguration.hasPin(pin), "Pin is not defined in pin configuration");
       return myPatternData.getStateCharacter(vector, myPinConfiguration.getPinIndex(pin));
     }
 
@@ -242,37 +237,37 @@ class Pattern {
       PatternData myPatternData;
 };
 
-// class Result {
-//   public:
-//     Result() {
-//       Serial.println("Initializing result with default values");
-//       passed = true;
-//       failed = false;
-//     }
+class Result {
+  public:
+    Result() {
+      Serial.println("Initializing result with default values");
+      passed = true;
+      failed = false;
+    }
 
-//     void fail(int failingVector) {
-//       passed = false;
-//       failed = true;
-//       failingVectors.push_back(failingVector);
-//     }
+    void fail(int failingVector) {
+      passed = false;
+      failed = true;
+      failingVectors.push_back(failingVector);
+    }
 
-//     bool hasPassed() {
-//       return passed;
-//     }
+    bool hasPassed() {
+      return passed;
+    }
 
-//     bool hasFailed() {
-//       return failed;
-//     }
+    bool hasFailed() {
+      return failed;
+    }
 
-//     std::vector<int> getFailingVectors() {
-//       return failingVectors;
-//     }
+    std::vector<int> getFailingVectors() {
+      return failingVectors;
+    }
 
-//   private:
-//     bool passed;
-//     bool failed;
-//     std::vector<int> failingVectors = std::vector<int>();
-// };
+  private:
+    bool passed;
+    bool failed;
+    std::vector<int> failingVectors = std::vector<int>();
+};
 
 class TestProgram {
   public:
@@ -326,12 +321,12 @@ void setup() {
   Serial.println("Starting setup");
   blink(Color::BOTH, 1);
 
-
   std::vector<Pin> myPinsMinimal = {
     Pin(GPIO::D9, PinRole::DRIVE),
     Pin(GPIO::A1, PinRole::DRIVE),
     Pin(GPIO::A2, PinRole::RECEIVE),
   };
+  
   std::vector<std::vector<char>> myPatternDataVectorsMinimal = {
     {'0', '0', 'L'},
     {'0', '1', 'L'},
@@ -339,89 +334,6 @@ void setup() {
     {'1', '1', 'H'}
   };
   
-  // std::vector<Pin> myPins = {
-  //   Pin(GPIO::D9, PinRole::DRIVE),
-  //   Pin(GPIO::A1, PinRole::DRIVE),
-  //   Pin(GPIO::A2, PinRole::RECEIVE),
-  //   Pin(GPIO::A3, PinRole::DRIVE),
-  //   Pin(GPIO::A4, PinRole::DRIVE),
-  //   Pin(GPIO::A5, PinRole::RECEIVE),
-  //   Pin(GPIO::D7, PinRole::DRIVE),
-  //   Pin(GPIO::D6, PinRole::DRIVE),
-  //   Pin(GPIO::D5, PinRole::RECEIVE),
-  //   Pin(GPIO::D4, PinRole::DRIVE),
-  //   Pin(GPIO::D3, PinRole::DRIVE),
-  //   Pin(GPIO::D2, PinRole::RECEIVE),
-  // };
-  // std::vector<std::vector<char>> myPatternDataVectors = {
-  //   {'0', '0', '0', '0', '0', '0', '0', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '0', '0', '0', '0', '1', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '0', '0', '0', '1', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '0', '0', '0', '1', '1', 'L', 'L', 'L', 'H'},
-  //   {'0', '0', '0', '0', '0', '1', '0', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '0', '0', '1', '0', '1', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '0', '0', '1', '1', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '0', '0', '1', '1', '1', 'L', 'L', 'L', 'H'},
-  //   {'0', '0', '0', '0', '1', '0', '0', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '0', '1', '0', '0', '1', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '0', '1', '0', '1', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '0', '1', '0', '1', '1', 'L', 'L', 'L', 'H'},
-  //   {'0', '0', '0', '0', '1', '1', '0', '0', 'L', 'L', 'H', 'L'},
-  //   {'0', '0', '0', '0', '1', '1', '0', '1', 'L', 'L', 'H', 'L'},
-  //   {'0', '0', '0', '0', '1', '1', '1', '0', 'L', 'L', 'H', 'L'},
-  //   {'0', '0', '0', '0', '1', '1', '1', '1', 'L', 'L', 'H', 'H'},
-  //   {'0', '0', '0', '1', '0', '0', '0', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '1', '0', '0', '0', '1', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '1', '0', '0', '1', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '1', '0', '0', '1', '1', 'L', 'L', 'L', 'H'},
-  //   {'0', '0', '0', '1', '0', '1', '0', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '1', '0', '1', '0', '1', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '1', '0', '1', '1', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '1', '0', '1', '1', '1', 'L', 'L', 'L', 'H'},
-  //   {'0', '0', '0', '1', '1', '0', '0', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '1', '1', '0', '0', '1', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '1', '1', '0', '1', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '0', '1', '1', '0', '1', '1', 'L', 'L', 'L', 'H'},
-  //   {'0', '0', '0', '1', '1', '1', '0', '0', 'L', 'L', 'H', 'L'},
-  //   {'0', '0', '0', '1', '1', '1', '0', '1', 'L', 'L', 'H', 'L'},
-  //   {'0', '0', '0', '1', '1', '1', '1', '0', 'L', 'L', 'H', 'L'},
-  //   {'0', '0', '0', '1', '1', '1', '1', '1', 'L', 'L', 'H', 'H'},
-  //   {'0', '0', '1', '0', '0', '0', '0', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '1', '0', '0', '0', '0', '1', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '1', '0', '0', '0', '1', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '1', '0', '0', '0', '1', '1', 'L', 'L', 'L', 'H'},
-  //   {'0', '0', '1', '0', '0', '1', '0', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '1', '0', '0', '1', '0', '1', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '1', '0', '0', '1', '1', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '1', '0', '0', '1', '1', '1', 'L', 'L', 'L', 'H'},
-  //   {'0', '0', '1', '0', '1', '0', '0', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '1', '0', '1', '0', '0', '1', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '1', '0', '1', '0', '1', '0', 'L', 'L', 'L', 'L'},
-  //   {'0', '0', '1', '0', '1', '0', '1', '1', 'L', 'L', 'L', 'H'},
-  //   {'0', '0', '1', '0', '1', '1', '0', '0', 'L', 'L', 'H', 'L'},
-  //   {'0', '0', '1', '0', '1', '1', '0', '1', 'L', 'L', 'H', 'L'},
-  //   {'0', '0', '1', '0', '1', '1', '1', '0', 'L', 'L', 'H', 'L'},
-  //   {'0', '0', '1', '0', '1', '1', '1', '1', 'L', 'L', 'H', 'H'},
-  //   {'0', '0', '1', '1', '0', '0', '0', '0', 'L', 'H', 'L', 'L'},
-  //   {'0', '0', '1', '1', '0', '0', '0', '1', 'L', 'H', 'L', 'L'},
-  //   {'0', '0', '1', '1', '0', '0', '1', '0', 'L', 'H', 'L', 'L'},
-  //   {'0', '0', '1', '1', '0', '0', '1', '1', 'L', 'H', 'L', 'H'},
-  //   {'0', '0', '1', '1', '0', '1', '0', '0', 'L', 'H', 'L', 'L'},
-  //   {'0', '0', '1', '1', '0', '1', '0', '1', 'L', 'H', 'L', 'L'},
-  //   {'0', '0', '1', '1', '0', '1', '1', '0', 'L', 'H', 'L', 'L'},
-  //   {'0', '0', '1', '1', '0', '1', '1', '1', 'L', 'H', 'L', 'H'},
-  //   {'0', '0', '1', '1', '1', '0', '0', '0', 'L', 'H', 'L', 'L'},
-  //   {'0', '0', '1', '1', '1', '0', '0', '1', 'L', 'H', 'L', 'L'},
-  //   {'0', '0', '1', '1', '1', '0', '1', '0', 'L', 'H', 'L', 'L'},
-  //   {'0', '0', '1', '1', '1', '0', '1', '1', 'L', 'H', 'L', 'H'},
-  //   {'0', '0', '1', '1', '1', '1', '0', '0', 'L', 'H', 'H', 'L'},
-  //   {'0', '0', '1', '1', '1', '1', '0', '1', 'L', 'H', 'H', 'L'},
-  //   {'0', '0', '1', '1', '1', '1', '1', '0', 'L', 'H', 'H', 'L'},
-  //   {'0', '0', '1', '1', '1', '1', '1', '1', 'L', 'H', 'H', 'H'},
-  // };
-
-
-
   PinConfiguration myPinConfiguration(myPinsMinimal);
   PatternData myPatternData(myPatternDataVectorsMinimal);
   Pattern myPattern(myPinConfiguration, myPatternData);
@@ -431,8 +343,6 @@ void setup() {
   TestProgram myTestProgram(myPattern);//, myResult);
 
   myTestProgram.execute();
-
-  while ( true );
 }
 
 void loop() {    }
