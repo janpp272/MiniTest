@@ -57,6 +57,8 @@ int gpioToPin(GPIO gpio) {
 
 bool assertThat(bool condition, String exception) {
   if (!condition) {
+    // Serial.begin(9600);
+    // Serial.println(exception);
     for (int i = 0; i < 3; i++) {
       blink(Color::RED, 2);
       delay(100);
@@ -124,7 +126,11 @@ class Pin {
 class PinConfiguration {
   public:
     PinConfiguration(std::vector<Pin> dataPins) {
-      // assertThat(std::find(dataPins.begin(), dataPins.end(), pinName) != dataPins.end(), "Duplicate pin defined!");
+      for (size_t i = 0; i < dataPins.size(); ++i) {
+        for (size_t j = i + 1; j < dataPins.size(); ++j) {
+          assertThat(dataPins[i].getName() != dataPins[j].getName(), "Duplicate pin found!");
+        }
+      }
       myPins = dataPins;
     }
 
@@ -202,9 +208,6 @@ class PatternData {
 class Pattern {
   public:
     Pattern(PinConfiguration pinConfiguration, PatternData patternData) : myPinConfiguration(pinConfiguration), myPatternData(patternData) {
-      // for (int i = 0; i < patternData.getVectorCount(); i++) {
-      //   assertThat(patternData.getVector(i).size() == pinConfiguration.getPinCount(), "Invalid number of state characters in vector!");
-      // }
     }
 
     std::vector<char> getVector(int vectorNumber) {
@@ -219,8 +222,14 @@ class Pattern {
 
     char getStateCharacter(int vector, Pin pin) {
       assertThat(vector >= 0 && vector < myPatternData.getVectorCount(), "Vector index out of range");
-      // assertThat(myPinConfiguration.hasPin(pin), "Pin is not defined in pin configuration");
-      return myPatternData.getStateCharacter(vector, myPinConfiguration.getPinIndex(pin));
+      assertThat(myPinConfiguration.hasPin(pin), "Pin is not defined in pin configuration");
+      char stateChar = myPatternData.getStateCharacter(vector, myPinConfiguration.getPinIndex(pin));
+      if (pin.getRole() == PinRole::DRIVE) {
+        assertThat(stateChar == '0' || stateChar == '1', "Invalid state character!");
+      } else {
+        assertThat(stateChar == 'L' || stateChar == 'H' || stateChar == 'X', "Invalid state character!");
+      }
+      return stateChar;
     }
 
     int getVectorCount() {
@@ -269,9 +278,11 @@ class TestProgram {
 
     void execute() {
       PinConfiguration pinConfiguration = myPattern.getPinConfiguration();
+      std::vector<Pin> drivePins = pinConfiguration.getPinGroupByRole(PinRole::DRIVE);
+      std::vector<Pin> receivePins = pinConfiguration.getPinGroupByRole(PinRole::RECEIVE);
       int vectorCount = myPattern.getVectorCount();
       for (int i = 0; i < vectorCount; i++) {
-        for (Pin pin : pinConfiguration.getPinGroupByRole(PinRole::DRIVE)) {
+        for (Pin pin : drivePins) {
           char driveValue = myPattern.getStateCharacter(i, pin);
           switch (driveValue) {
             case '0':
@@ -282,14 +293,16 @@ class TestProgram {
               break;
           }
         }
-        delay(10);
-        for (Pin pin : pinConfiguration.getPinGroupByRole(PinRole::RECEIVE)) {
+        delay(50);
+        for (Pin pin : receivePins) {
           char expectedResponse = myPattern.getStateCharacter(i, pin);
           int pinResponse = digitalRead(gpioToPin(pin.getName()));
-          if (pinResponse == 1 && expectedResponse == 'L') {
-            myResult.fail(vectorCount);
-          } else if (pinResponse == 0 && expectedResponse == 'H') {
-            myResult.fail(vectorCount);
+          if (expectedResponse != 'X') {
+            if (pinResponse == 1 && expectedResponse != 'H') {
+              myResult.fail(vectorCount);
+            } else if (pinResponse == 0 && expectedResponse != 'L') {
+              myResult.fail(vectorCount);
+            }
           }
         }
       }
@@ -304,21 +317,23 @@ void setup() {
   pinMode(11, OUTPUT); //RED
   pinMode(12, OUTPUT); //GREEN
 
-  std::vector<Pin> myPinsMinimal = {
+  // blink(Color::BOTH, 1);
+
+  std::vector<Pin> myPins = {
     Pin(GPIO::D9, PinRole::DRIVE),
     Pin(GPIO::A1, PinRole::DRIVE),
-    Pin(GPIO::A2, PinRole::RECEIVE),
+    Pin(GPIO::A2, PinRole::RECEIVE)
   };
   
-  std::vector<std::vector<char>> myPatternDataVectorsMinimal = {
+  std::vector<std::vector<char>> myPatternDataVectors = {
     {'0', '0', 'L'},
     {'0', '1', 'L'},
     {'1', '0', 'L'},
     {'1', '1', 'H'}
   };
   
-  PinConfiguration myPinConfiguration(myPinsMinimal);
-  PatternData myPatternData(myPatternDataVectorsMinimal);
+  PinConfiguration myPinConfiguration(myPins);
+  PatternData myPatternData(myPatternDataVectors);
   Pattern myPattern(myPinConfiguration, myPatternData);
   
   Result myResult;
@@ -328,9 +343,9 @@ void setup() {
   myTestProgram.execute();
 
   if (myResult.hasPassed()) {
-    blink(Color::GREEN, 1);
+    blink(Color::GREEN, 3);
   } else {
-    blink(Color::RED, 1);
+    blink(Color::RED, 3);
   }
 }
 
