@@ -1,13 +1,17 @@
 /**
- * MiniTest.ino
- * @brief A small testing framework for executing digital tests for logic ICs on Arduino.
+ * @name MiniTest
+ * @file MiniTest.ino
  * @author janpp272
+ * @brief A small testing framework for executing digital tests for logic ICs on Arduino.
  */
 #include <ArduinoSTL.h>
 
 #include <iostream>
 #include <vector>
 #include <algorithm>
+
+static const uint8_t LED_RED = 11;
+static const uint8_t LED_GREEN = 12;
 
 /** 
  * @brief Enum class for colors.
@@ -21,7 +25,7 @@ enum class Color {
 /**
  * @brief Enum class for pin roles.
  * Drive pins will be initialized as OUTPUT pins to send signals to the IC.
- * Receive pins will be initialized as INPUT pins to recieve signals from the IC.
+ * Receive pins will be initialized as INPUT pins to receive signals from the IC.
  */
 enum class PinRole {
   DRIVE,
@@ -90,8 +94,8 @@ bool assertThat(bool condition, String exception) {
       delay(100);
     }
     Serial.begin(9600);
-    while (!Serial);
     Serial.println(exception);
+    Serial.flush();
     abort();
   }
 }
@@ -105,18 +109,18 @@ void blink(Color color, double duration) {
   assertThat(duration > 0, "Unexpected blink duration!");
   switch(color) {
     case Color::RED:
-      digitalWrite(11, HIGH);
+      digitalWrite(LED_RED, HIGH);
       break;
     case Color::GREEN:
-      digitalWrite(12, HIGH);
+      digitalWrite(LED_GREEN, HIGH);
       break;
     case Color::BOTH:
-      digitalWrite(11, HIGH);
-      digitalWrite(12, HIGH);
+      digitalWrite(LED_RED, HIGH);
+      digitalWrite(LED_GREEN, HIGH);
   }
   delay(duration * 1000);
-  digitalWrite(11, LOW);
-  digitalWrite(12, LOW);
+  digitalWrite(LED_RED, LOW);
+  digitalWrite(LED_GREEN, LOW);
 }
 
 /**
@@ -334,9 +338,10 @@ class Pattern {
      * @return The pattern data.
      */
     std::vector<char> getVector(int vectorNumber) {
-      assertThat(vectorNumber < myPatternData.getVectorCount() && vectorNumber >= 0, "Vector number out of range");
-      assertThat(myPatternData.getVector(vectorNumber).size() == myPinConfiguration.getPinCount(), "Wrong number of elements in vector!");
-      return myPatternData.getVector(vectorNumber);
+      assertThat(vectorNumber < myPatternData.getVectorCount() && vectorNumber >= 0, "Vector number out of range!");
+      auto vector = myPatternData.getVector(vectorNumber);
+      assertThat(vector.size() == myPinConfiguration.getPinCount(), "Wrong number of elements in vector!");
+      return vector;
     }
 
     /**
@@ -470,9 +475,7 @@ class TestProgram {
           char expectedResponse = myPattern.getStateCharacter(i, pin);
           int pinResponse = digitalRead(gpioToPin(pin.getName()));
           if (expectedResponse != 'X') {
-            if (pinResponse == 1 && expectedResponse != 'H') {
-              myResult.fail(vectorCount);
-            } else if (pinResponse == 0 && expectedResponse != 'L') {
+            if ((pinResponse == 1 && expectedResponse != 'H') || (pinResponse == 0 && expectedResponse != 'L')) {
               myResult.fail(vectorCount);
             }
           }
@@ -487,15 +490,16 @@ class TestProgram {
 
 /**
  * @brief Setup function for the Arduino sketch.
- * Initializes the pins and executes the test program.
+ * Uses the framework to test a simple AND-gate.
  */
 void setup() {
   // Set pin modes for LEDs
-  pinMode(11, OUTPUT); //RED
-  pinMode(12, OUTPUT); //GREEN
+  pinMode(LED_RED, OUTPUT);
+  pinMode(LED_GREEN, OUTPUT);
 
   // Example pin configuration for testing an AND-gate with 2 inputs and 1 output
-  // Pin D9 and A1 are the inputs (drive pins) and A2 is the output (receive pin).
+  // Pin D9 and A1 are the defined as outputs of the Arduino and are connected to the inputs of the AND-gate.
+  // Pin A2 is defined as input of the Arduino and is connected to the output of the AND-gate.
   std::vector<Pin> myPins = {
     Pin(GPIO::D9, PinRole::DRIVE),
     Pin(GPIO::A1, PinRole::DRIVE),
@@ -526,7 +530,6 @@ void setup() {
   // Evaluate and display the results
   if (myResult.hasPassed()) {
     blink(Color::GREEN, 0.3);
-
   } else {
     blink(Color::RED, 0.3);
   }
