@@ -197,15 +197,15 @@ class PinConfiguration {
   public:
     /**
      * @brief Constructor for PinConfiguration.
-     * @param dataPins A vector of pins to be configured.
+     * @param dataPins A pointer to a vector of pins to be configured.
      */
-    PinConfiguration(std::vector<Pin> dataPins) {
-      for (size_t i = 0; i < dataPins.size(); ++i) {
-        for (size_t j = i + 1; j < dataPins.size(); ++j) {
-          assertThat(dataPins[i].getName() != dataPins[j].getName(), "Duplicate pin found!");
+    PinConfiguration(const std::vector<Pin>* dataPins) {
+      for (size_t i = 0; i < dataPins->size(); ++i) {
+        for (size_t j = i + 1; j < dataPins->size(); ++j) {
+          assertThat((*dataPins)[i].getName() != (*dataPins)[j].getName(), "Duplicate pin found!");
         }
       }
-      myPins = dataPins;
+      myPins = *dataPins;
     }
 
     /**
@@ -265,25 +265,20 @@ class PatternData {
   public:
     /**
      * @brief Constructor for PatternData.
-     * @param data A vector of vectors representing the pattern data.
+     * @param data A pointer to a vector of vectors representing the pattern data.
      */
-    PatternData(std::vector<std::vector<char>> data) {
-      assertThat(data.size() > 0, "Pattern is empty!");
+    PatternData(const std::vector<std::vector<char>>* data) {
+      assertThat(data->size() > 0, "Pattern is empty!");
 
-      std::vector<char> allowedCharacters;
-      allowedCharacters.push_back('0');
-      allowedCharacters.push_back('1');
-      allowedCharacters.push_back('L');
-      allowedCharacters.push_back('H');
-      allowedCharacters.push_back('X');
+      std::vector<char> allowedCharacters = {'0', '1', 'L', 'H', 'X'};
 
-      for (std::vector<char> vector : data) {
+      for (const auto& vector : *data) {
         for (char stateCharacter : vector) {
           assertThat(std::find(allowedCharacters.begin(), allowedCharacters.end(), stateCharacter) != allowedCharacters.end(), "Invalid state character");
         }
       }
 
-      myData = data;
+      myData = *data;
     }
 
     /**
@@ -327,10 +322,11 @@ class Pattern {
   public:
     /**
      * @brief Constructor for Pattern.
-     * @param pinConfiguration The pin configuration for the pattern.
-     * @param patternData The pattern data for the pattern.
+     * @param pinConfiguration A pointer to the pin configuration for the pattern.
+     * @param patternData A pointer to the pattern data for the pattern.
      */
-    Pattern(PinConfiguration pinConfiguration, PatternData patternData) : myPinConfiguration(pinConfiguration), myPatternData(patternData) {
+    Pattern(const PinConfiguration* pinConfiguration, const PatternData* patternData) 
+      : myPinConfiguration(*pinConfiguration), myPatternData(*patternData) {
     }
 
     /**
@@ -444,10 +440,11 @@ class TestProgram {
   public:
     /**
      * @brief Constructor for TestProgram.
-     * @param pattern The pattern to execute.
-     * @param result The result object to store the test result.
+     * @param pattern A pointer to the pattern to execute.
+     * @param result A reference to the result object to store the test result.
      */
-    TestProgram(Pattern pattern, Result& result) : myPattern(pattern), myResult(result) {    }
+    TestProgram(const Pattern* pattern, Result& result) 
+      : myPattern(*pattern), myResult(result) {    }
 
     /**
      * @brief Executes the test program.
@@ -500,15 +497,15 @@ void setup() {
   // Example pin configuration for testing an AND-gate with 2 inputs and 1 output
   // Pin D9 and A1 are the defined as outputs of the Arduino and are connected to the inputs of the AND-gate.
   // Pin A2 is defined as input of the Arduino and is connected to the output of the AND-gate.
-  std::vector<Pin> myPins = {
+  const std::vector<Pin> myPins = {
     Pin(GPIO::D9, PinRole::DRIVE),
     Pin(GPIO::A1, PinRole::DRIVE),
-    Pin(GPIO::A2, PinRole::RECEIVE)
+    Pin(GPIO::A2, PinRole::RECEIVE),
   };
   
   // Example pattern data for the AND-gate test program
   // The first two vectors represent the input combinations (00, 01, 10, 11) and the expected output (L or H).
-  std::vector<std::vector<char>> myPatternDataVectors = {
+  const std::vector<std::vector<char>> myPatternDataVectors = {
     {'0', '0', 'L'},
     {'0', '1', 'L'},
     {'1', '0', 'L'},
@@ -516,13 +513,13 @@ void setup() {
   };
   
   // Initialize all necessary objects
-  PinConfiguration myPinConfiguration(myPins);
-  PatternData myPatternData(myPatternDataVectors);
-  Pattern myPattern(myPinConfiguration, myPatternData);
+  PinConfiguration myPinConfiguration(&myPins);
+  PatternData myPatternData(&myPatternDataVectors);
+  Pattern myPattern(&myPinConfiguration, &myPatternData);
   
   Result myResult;
 
-  TestProgram myTestProgram(myPattern, myResult);
+  TestProgram myTestProgram(&myPattern, myResult);
 
   // Execute the test program on the IC
   myTestProgram.execute();
